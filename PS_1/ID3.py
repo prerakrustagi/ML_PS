@@ -168,6 +168,17 @@ def evaluate(node, example):
         continue
   return None
 
+def isLeafNode(node):
+  return len(node.children) == 0 and node.output != None
 
+def findLeafNodes(parentNode, node, leafNodes):
+  if isLeafNode(node):
+      temp = dict()
+      temp['parent'] = parentNode
+      temp['node'] = node
+      leafNodes.append(temp)
+  else:
+    for child in node.children:
+      findLeafNodes(node, child, leafNodes)
 
   
