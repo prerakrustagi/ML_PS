@@ -1,5 +1,5 @@
 from node import Node
-import math
+import math, copy
 CLASS = "Class"
 
 def ID3(examples, default):
@@ -9,28 +9,33 @@ def ID3(examples, default):
   and the target class variable is a special attribute with the name "Class".
   Any missing attributes are denoted with a value of "?"
   '''
-  root = Node(None, None, None)
+  root = Node(None, None, None, None)
   attributes = getAttributesList(examples)
   buildTree(examples, default, root, attributes)
   return root
 
 def buildTree(examples, default, parentNode, attributes):
-  if not examples:
+  if not examples or not attributes or len(attributes) is 0:
     parentNode.addChild(Node(default, default, default))
   elif isNonTrivialSplitPossible(examples) == False:
     modeClass = getModeClassLabel(examples)
     parentNode.addChild(Node(modeClass, modeClass, modeClass))
   else:
     bestAttribute = getBestAttribute(examples, attributes)
+    #print(bestAttribute + " is best attribute from " + " , ".join(attributes))
+    #if bestAttribute is None:
+     # print("something is wrong! best attribute is none")
     possibleValues = getPossibleValuesForAttribute(examples, bestAttribute)
-    for value in possibleValues:
-      child = Node(bestAttribute, value, None)
+    for value in possibleValues:      
       examplesWithBesAttributeValue = getExamplesWithBestAttributeValue(examples, bestAttribute, value)
+      attributeValueProbability = len(examplesWithBesAttributeValue) / len(examples)
+      child = Node(bestAttribute, value, None, attributeValueProbability)
       modeOfExampleWithBestValue = getModeClassLabel(examplesWithBesAttributeValue)
       if attributes.__contains__(bestAttribute):
         attributes.remove(bestAttribute)
       buildTree(examplesWithBesAttributeValue, modeOfExampleWithBestValue, child, attributes)
       parentNode.addChild(child)
+
 
 def getExamplesWithBestAttributeValue(examples, bestAttribute, value):
   examplesWithBestValue = []
@@ -70,7 +75,7 @@ def getAttributesList(examples):
   return keys
   
 def getPossibleValuesForAttribute(examples, attribute):
-  values = set()
+  values = set()  
   for example in examples:
     values.add(example[attribute])
   return list(values)
@@ -80,10 +85,12 @@ def getBestAttribute(examples, attributes):
   calculate the Entropy for each attribute
   select the one which has the least entropy
   '''  
+  if(len(attributes) is 1):
+    return attributes[0]
   bestAttribute = None
   minEntropy = None
   for attribute in attributes:
-    entropy = getInfoGainForAttribute(examples, attribute)
+    entropy = getEntropyForAttribute(examples, attribute)
     if entropy is None:
       continue    
     elif minEntropy is None:
@@ -94,19 +101,17 @@ def getBestAttribute(examples, attributes):
       bestAttribute = attribute
   return bestAttribute
 
-def getInfoGainForAttribute(examples, attribute):
+def getEntropyForAttribute(examples, attribute):
   '''
   1. list the possible output values for this attribute
   2. foreach attribute value: calculate P(Ai = v) * entropy of Y for Ai = v
   3. return sum of above 
   '''
   attrOutputValues = set()  # unique output values possible for this attribute
-  # attributeValueOutputListMap = []
   for example in examples:
     attrOutputValues.add(example[attribute])
-    # attributeValueOutputListMap.append(dict(example[attribute], example["class"]))
   if len(attrOutputValues) is 1:
-    return None
+    return 1
   totalEntropy = 0
   examplesCount = len(examples)
 
@@ -136,8 +141,50 @@ def prune(node, examples):
   Takes in a trained tree and a validation set of examples.  Prunes nodes in order
   to improve accuracy on the validation data; the precise pruning strategy is up to you.
   '''
+  if not examples:
+    return
+  if node.value is None and node.output is None:
+    return 
   originalAccuracy = test(node, examples)
-  
+  prunableNodes = []
+  findPrunableNodes(node, prunableNodes)
+  for prunableNode in prunableNodes:
+    pruneOutput = getPruneOutput(prunableNode)
+    pruneChildren = prunableNode.children
+    prunableNode.children = []
+    pruneAccuracy = test(node, examples)
+    if originalAccuracy > pruneAccuracy(node, examples):
+      prunableNode.children = pruneChildren
+    else:
+      prunableNode.output = pruneOutput
+      #prune(node, examples)
+
+def isLeafNode(node):
+  return len(node.children) == 0 and node.output != None
+
+def isPrunableNode(node):
+  totalChild = len(node.children)
+  for child in node.children:
+    if not isLeafNode(child):
+      totalChild -= 1
+      break
+  return totalChild == 0    
+
+def findPrunableNodes(node, prunableNodes):
+  if isPrunableNode(node):
+      prunableNodes.append(node)
+  else:
+    for child in node.children:
+      findPrunableNodes(child, prunableNodes)
+
+def getPruneOutput(node):
+  output = None
+  attrProb = 0.0
+  for child in node.children:
+    if attrProb < child.probability:
+      attrProb = child.probability
+      output = child.output
+  return output  
 
 
 def test(node, examples):
@@ -158,27 +205,19 @@ def evaluate(node, example):
   Takes in a tree and one example.  Returns the Class value that the tree
   assigns to the example.
   ''' 
-  tempNode = node
-  while tempNode.children is not None:
+  tempNode = copy.deepcopy(node)
+  childrenTraversed = 0  
+  childrenLength = len(tempNode.children)
+  while tempNode.children is not None and childrenTraversed <= childrenLength:
+    childrenTraversed += 1
     for child in tempNode.children:
       if(child.output is not None):
         return child.output
       elif example[child.attribute] == child.value:
         tempNode = child
-        continue
-  return None
+        continue      
+  return None  
 
-def isLeafNode(node):
-  return len(node.children) == 0 and node.output != None
 
-def findLeafNodes(parentNode, node, leafNodes):
-  if isLeafNode(node):
-      temp = dict()
-      temp['parent'] = parentNode
-      temp['node'] = node
-      leafNodes.append(temp)
-  else:
-    for child in node.children:
-      findLeafNodes(node, child, leafNodes)
 
   
