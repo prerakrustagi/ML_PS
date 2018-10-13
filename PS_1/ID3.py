@@ -16,10 +16,10 @@ def ID3(examples, default):
 
 def buildTree(examples, default, parentNode, attributes):
   if not examples or not attributes or len(attributes) is 0:
-    parentNode.addChild(Node(default, default, default))
+    parentNode.addChild(Node(default, default, default,0.0))
   elif isNonTrivialSplitPossible(examples) == False:
     modeClass = getModeClassLabel(examples)
-    parentNode.addChild(Node(modeClass, modeClass, modeClass))
+    parentNode.addChild(Node(modeClass, modeClass, modeClass,0.0))
   else:
     bestAttribute = getBestAttribute(examples, attributes)
     #print(bestAttribute + " is best attribute from " + " , ".join(attributes))
@@ -30,6 +30,8 @@ def buildTree(examples, default, parentNode, attributes):
       examplesWithBesAttributeValue = getExamplesWithBestAttributeValue(examples, bestAttribute, value)
       attributeValueProbability = len(examplesWithBesAttributeValue) / len(examples)
       child = Node(bestAttribute, value, None, attributeValueProbability)
+      if bestAttribute is value:
+        print("something is terribly wrong, attribute = value")
       modeOfExampleWithBestValue = getModeClassLabel(examplesWithBesAttributeValue)
       if attributes.__contains__(bestAttribute):
         attributes.remove(bestAttribute)
@@ -143,8 +145,8 @@ def prune(node, examples):
   '''
   if not examples:
     return
-  if node.value is None and node.output is None:
-    return 
+  #if node.value is None and node.output is None:
+   # return 
   originalAccuracy = test(node, examples)
   prunableNodes = []
   findPrunableNodes(node, prunableNodes)
@@ -153,7 +155,7 @@ def prune(node, examples):
     pruneChildren = prunableNode.children
     prunableNode.children = []
     pruneAccuracy = test(node, examples)
-    if originalAccuracy > pruneAccuracy(node, examples):
+    if originalAccuracy > pruneAccuracy:
       prunableNode.children = pruneChildren
     else:
       prunableNode.output = pruneOutput
@@ -181,8 +183,8 @@ def getPruneOutput(node):
   output = None
   attrProb = 0.0
   for child in node.children:
-    if attrProb < child.probability:
-      attrProb = child.probability
+    if attrProb < child.attributeValueProbability:
+      attrProb = child.attributeValueProbability
       output = child.output
   return output  
 
