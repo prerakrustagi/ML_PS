@@ -184,8 +184,8 @@ def getPruneOutput(node):
   output = None
   attrProb = 0.0
   for child in node.children:
-    if attrProb < child.attributeValueProbability:
-      attrProb = child.attributeValueProbability
+    if attrProb < child.probability:
+      attrProb = child.probability
       output = child.output
   return output  
 
@@ -214,9 +214,18 @@ def evaluate(node, example):
   while tempNode.children is not None and childrenTraversed <= childrenLength:
     childrenTraversed += 1
     for child in tempNode.children:
+      if child.attribute == None:
+        print('-------')
+        print(child.attribute)
+        print(type(child.attribute))
+        print(child.value)
+        print(type(child.value))
+        print(child.output)
+        print(type(child.output))
+        print('-------')
       if(child.output is not None):
         return child.output
-      elif example[child.attribute] == child.value:
+      elif str(example[child.attribute]) == child.value:
         tempNode = child
         continue      
   return None  
@@ -265,15 +274,24 @@ def createTree(data, availableAttributes, treeNode):
   bestAttributeInfo = findBestAttribute(data, availableAttributes)
   bestAttrib = next(iter(bestAttributeInfo))
   bestAttributeInfo = bestAttributeInfo[bestAttrib]
+  bestAttributeTotal = bestAttributeInfo['_total']
   del bestAttributeInfo['_total']
   del bestAttributeInfo['_ig']
 
   for value in bestAttributeInfo:
-    tempChild = Node(value, bestAttrib, None)
+    attribValueCount = bestAttributeInfo[value]['_total']
+
+    tempChild = Node(value, bestAttrib, None, (1.0 * attribValueCount / bestAttributeTotal))
     if len(bestAttributeInfo[value].keys()) == 2:
+      # I will have the leaf node
       output = list(bestAttributeInfo[value].keys())
       output.remove('_total')
-      tempChild.output = output[0]
+      outputVal = output[0]
+      try:
+        outputVal = int(outputVal)
+      except Exception:
+        outputVal = outputVal
+      tempChild.children.append(Node(None, None, outputVal))
       treeNode.children.append(tempChild)
     else:
       subData = []
