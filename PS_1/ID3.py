@@ -149,7 +149,8 @@ def pruneNode(rootNode, prunableNode, originalAccuracy, examples):
   return True
 
 def isLeafNode(node):
-  return len(node.children) == 0 and node.output != None
+  return len(node.children) == 1 and node.output == None and node.children[0].output != None
+
 
 #All the children have the same attribute
 #Every child of all children should have an output value
@@ -164,8 +165,8 @@ def isPrunableNode(node):
       continue
     else: 
       return False
-  return True
-  
+  return True  
+
 def findPrunableNodes(node, prunableNodes):
   if isPrunableNode(node):
       prunableNodes.append(node)
@@ -181,7 +182,6 @@ def getPruneOutput(node):
       attrProb = child.probability
       output = child.children[0].output
   return output   
-
 
 def test(node, examples):
   '''
