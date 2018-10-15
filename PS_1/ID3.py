@@ -15,31 +15,6 @@ def ID3(examples, default):
   createTree(examples, columnArray, id3Tree)
   return id3Tree
 
-def buildTree(examples, default, parentNode, attributes):
-  if not examples or not attributes or len(attributes) is 0:
-    parentNode.addChild(Node(default, default, default,0.0))
-  elif isNonTrivialSplitPossible(examples) == False:
-    modeClass = getModeClassLabel(examples)
-    parentNode.addChild(Node(modeClass, modeClass, modeClass,0.0))
-  else:
-    bestAttribute = getBestAttribute(examples, attributes)
-    #print(bestAttribute + " is best attribute from " + " , ".join(attributes))
-    #if bestAttribute is None:
-     # print("something is wrong! best attribute is none")
-    possibleValues = getPossibleValuesForAttribute(examples, bestAttribute)
-    for value in possibleValues:      
-      examplesWithBesAttributeValue = getExamplesWithBestAttributeValue(examples, bestAttribute, value)
-      attributeValueProbability = len(examplesWithBesAttributeValue) / len(examples)
-      child = Node(bestAttribute, value, None, attributeValueProbability)
-      if bestAttribute is value:
-        print("something is terribly wrong, attribute = value")
-      modeOfExampleWithBestValue = getModeClassLabel(examplesWithBesAttributeValue)
-      if attributes.__contains__(bestAttribute):
-        attributes.remove(bestAttribute)
-      buildTree(examplesWithBesAttributeValue, modeOfExampleWithBestValue, child, attributes)
-      parentNode.addChild(child)
-
-
 def getExamplesWithBestAttributeValue(examples, bestAttribute, value):
   examplesWithBestValue = []
   for example in examples:
@@ -146,33 +121,51 @@ def prune(node, examples):
   '''
   if not examples:
     return
-  #if node.value is None and node.output is None:
-   # return 
   originalAccuracy = test(node, examples)
   prunableNodes = []
   findPrunableNodes(node, prunableNodes)
-  for prunableNode in prunableNodes:
-    pruneOutput = getPruneOutput(prunableNode)
-    pruneChildren = prunableNode.children
-    prunableNode.children = []
-    pruneAccuracy = test(node, examples)
-    if originalAccuracy > pruneAccuracy:
-      prunableNode.children = pruneChildren
-    else:
-      prunableNode.output = pruneOutput
-      #prune(node, examples)
+  totalPrunableNodes = len(prunableNodes)
+  nodesPruned = 0
+  while nodesPruned < totalPrunableNodes:
+    isNodePruned = pruneNode(node, prunableNodes[nodesPruned],originalAccuracy,examples)
+    nodesPruned += 1
+    if isNodePruned is True:
+      findPrunableNodes(node, prunableNodes)
+      totalPrunableNodes = len(prunableNodes)
+      nodesPruned = 0  
+      isNodePruned = False
+  
+def pruneNode(rootNode, prunableNode, originalAccuracy, examples):
+  if prunableNode.output is not None:
+    return False  
+  pruneOutput = getPruneOutput(prunableNode)
+  pruneChildren = prunableNode.children
+  prunableNode.children = []
+  prunableNode.output = pruneOutput
+  pruneAccuracy = test(rootNode, examples)
+  if originalAccuracy > pruneAccuracy:
+    prunableNode.children = pruneChildren
+    return False
+  return True
 
 def isLeafNode(node):
   return len(node.children) == 0 and node.output != None
 
-def isPrunableNode(node):
-  totalChild = len(node.children)
+#All the children have the same attribute
+#Every child of all children should have an output value
+def isPrunableNode(node):  
+  if not node.children:
+    return False
+  attribute = node.children[0].attribute
   for child in node.children:
-    if not isLeafNode(child):
-      totalChild -= 1
-      break
-  return totalChild == 0    
-
+    if child.attribute is not attribute or not child.children:
+      return False
+    if len(child.children) == 1 and child.children[0].output is not None:
+      continue
+    else: 
+      return False
+  return True
+  
 def findPrunableNodes(node, prunableNodes):
   if isPrunableNode(node):
       prunableNodes.append(node)
@@ -182,12 +175,12 @@ def findPrunableNodes(node, prunableNodes):
 
 def getPruneOutput(node):
   output = None
-  attrProb = 0.0
+  attrProb = -1
   for child in node.children:
     if attrProb < child.probability:
       attrProb = child.probability
-      output = child.output
-  return output  
+      output = child.children[0].output
+  return output   
 
 
 def test(node, examples):
@@ -213,16 +206,7 @@ def evaluate(node, example):
   childrenLength = len(tempNode.children)
   while tempNode.children is not None and childrenTraversed <= childrenLength:
     childrenTraversed += 1
-    for child in tempNode.children:
-      if child.attribute == None:
-        print('-------')
-        print(child.attribute)
-        print(type(child.attribute))
-        print(child.value)
-        print(type(child.value))
-        print(child.output)
-        print(type(child.output))
-        print('-------')
+    for child in tempNode.children:      
       if(child.output is not None):
         return child.output
       elif str(example[child.attribute]) == child.value:
