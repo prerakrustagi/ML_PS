@@ -155,6 +155,7 @@ def prune(node, examples):
     pruneOutput = getPruneOutput(prunableNode)
     pruneChildren = prunableNode.children
     prunableNode.children = []
+    prunableNode.children.append(Node(None, None, pruneOutput))
     pruneAccuracy = test(node, examples)
     if originalAccuracy > pruneAccuracy:
       prunableNode.children = pruneChildren
@@ -163,12 +164,13 @@ def prune(node, examples):
       #prune(node, examples)
 
 def isLeafNode(node):
-  return len(node.children) == 0 and node.output != None
+  return len(node.children) == 1 and node.output == None and node.children[0].output != None
+
 
 def isPrunableNode(node):
   totalChild = len(node.children)
   for child in node.children:
-    if not isLeafNode(child):
+    if isLeafNode(child):
       totalChild -= 1
       break
   return totalChild == 0    
@@ -182,12 +184,12 @@ def findPrunableNodes(node, prunableNodes):
 
 def getPruneOutput(node):
   output = None
-  attrProb = 0.0
+  attrProb = -1
   for child in node.children:
     if attrProb < child.probability:
       attrProb = child.probability
-      output = child.output
-  return output  
+      output = child.children[0].output
+  return output
 
 
 def test(node, examples):
