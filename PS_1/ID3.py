@@ -9,10 +9,11 @@ def ID3(examples, default):
   and the target class variable is a special attribute with the name "Class".
   Any missing attributes are denoted with a value of "?"
   '''
-  root = Node(None, None, None, None)
-  attributes = getAttributesList(examples)
-  buildTree(examples, default, root, attributes)
-  return root
+  id3Tree = Node(None, 'root', None)
+  columnArray = list(examples[0].keys())
+  columnArray.remove('Class')
+  createTree(examples, columnArray, id3Tree)
+  return id3Tree
 
 def buildTree(examples, default, parentNode, attributes):
   if not examples or not attributes or len(attributes) is 0:
@@ -219,6 +220,70 @@ def evaluate(node, example):
         tempNode = child
         continue      
   return None  
+
+def findBestAttribute(data, availableLabels):
+  attribMap = dict()
+  bestAttribName = ''
+  bestAttribValue = 1
+  for label in availableLabels:
+    attribMap[label] = dict()
+
+  for row in data:
+    for key in row:
+      if key != 'Class' and key in availableLabels:
+        if not '_total' in attribMap[key]:
+          attribMap[key]['_total'] = 0
+        attribMap[key]['_total'] += 1
+        if not str(row[key]) in attribMap[key]:
+          attribMap[key][str(row[key])] = dict()
+          attribMap[key][str(row[key])]['_total'] = 0
+        if not str(row['Class']) in attribMap[key][str(row[key])]:
+          attribMap[key][str(row[key])][str(row['Class'])] = 0
+        attribMap[key][str(row[key])][str(row['Class'])] += 1
+        attribMap[key][str(row[key])]['_total'] += 1
+
+  for attrib in attribMap:
+    attribGain = 0
+    attribTotal = attribMap[attrib]['_total']
+    for key in attribMap[attrib]:
+      if key != '_total':
+        keyTotal = attribMap[attrib][key]['_total']
+        for subKey in attribMap[attrib][key]:
+          if subKey != '_total':
+            attribGain += ((1.0 * keyTotal) / attribTotal) * ((-1) * ( ((1.0 * attribMap[attrib][key][subKey]) / keyTotal) * math.log(((1.0 * attribMap[attrib][key][subKey]) / keyTotal)) ) )
+
+    attribMap[attrib]['_ig'] = attribGain
+    if bestAttribValue > attribGain:
+      bestAttribValue = attribGain
+      bestAttribName = attrib
+
+  returnMap = dict()
+  returnMap[bestAttribName] = attribMap[bestAttribName]
+  return returnMap
+
+def createTree(data, availableAttributes, treeNode):
+  bestAttributeInfo = findBestAttribute(data, availableAttributes)
+  bestAttrib = next(iter(bestAttributeInfo))
+  bestAttributeInfo = bestAttributeInfo[bestAttrib]
+  del bestAttributeInfo['_total']
+  del bestAttributeInfo['_ig']
+
+  for value in bestAttributeInfo:
+    tempChild = Node(value, bestAttrib, None)
+    if len(bestAttributeInfo[value].keys()) == 2:
+      output = list(bestAttributeInfo[value].keys())
+      output.remove('_total')
+      tempChild.output = output[0]
+      treeNode.children.append(tempChild)
+    else:
+      subData = []
+      for instance in data:
+        if str(instance[bestAttrib]) == str(value):
+          subData.append(instance)
+      treeNode.children.append(tempChild)
+      tempAvailableAttributes = availableAttributes.copy()
+      tempAvailableAttributes.remove(bestAttrib)
+      createTree(subData, tempAvailableAttributes, tempChild)
 
 
 
