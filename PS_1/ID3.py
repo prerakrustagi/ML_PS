@@ -130,6 +130,8 @@ def prune(node, examples):
     isNodePruned = pruneNode(node, prunableNodes[nodesPruned],originalAccuracy,examples)
     nodesPruned += 1
     if isNodePruned is True:
+      originalAccuracy = test(node, examples)
+      prunableNodes = []
       findPrunableNodes(node, prunableNodes)
       totalPrunableNodes = len(prunableNodes)
       nodesPruned = 0  
@@ -141,7 +143,7 @@ def pruneNode(rootNode, prunableNode, originalAccuracy, examples):
   pruneOutput = getPruneOutput(prunableNode)
   pruneChildren = prunableNode.children
   prunableNode.children = []
-  prunableNode.output = pruneOutput
+  prunableNode.children.append(Node(None, None, pruneOutput))
   pruneAccuracy = test(rootNode, examples)
   if originalAccuracy > pruneAccuracy:
     prunableNode.children = pruneChildren
