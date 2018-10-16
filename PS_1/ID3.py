@@ -153,7 +153,6 @@ def pruneNode(rootNode, prunableNode, originalAccuracy, examples):
 def isLeafNode(node):
   return len(node.children) == 1 and node.output == None and node.children[0].output != None
 
-
 #All the children have the same attribute
 #Every child of all children should have an output value
 def isPrunableNode(node):  
@@ -185,6 +184,16 @@ def getPruneOutput(node):
       output = child.children[0].output
   return output   
 
+def getChildValueWithMaxProbability(node, attribute):
+  value = None
+  attrProb = -1
+  if node.children:
+    for child in node.children:
+      if attrProb < child.probability:
+         attrProb = child.probability
+         value = child.value
+  return value   
+
 def test(node, examples):
   '''
   Takes in a trained tree and a test set of examples.  Returns the accuracy (fraction
@@ -202,19 +211,40 @@ def evaluate(node, example):
   '''
   Takes in a tree and one example.  Returns the Class value that the tree
   assigns to the example.
-  ''' 
+  '''  
   tempNode = copy.deepcopy(node)
   childrenTraversed = 0  
   childrenLength = len(tempNode.children)
-  while tempNode.children is not None and childrenTraversed <= childrenLength:
+  while tempNode is not None and childrenTraversed < childrenLength:
     childrenTraversed += 1
-    for child in tempNode.children:      
+    result = evaluateNode(tempNode, example)
+    if result is not None:
+      return result
+    elif tempNode.children:
+       splitAttribute = tempNode.children[0].attribute
+       if splitAttribute in example:
+         assumedValue = getChildValueWithMaxProbability(tempNode, splitAttribute)
+         example[splitAttribute] = assumedValue
+         result = evaluateNode(tempNode, example)
+       if result is not None:
+         return result  
+  return None  
+
+def evaluateNode(tempNode, example): 
+  childrenTraversed = 0  
+  childrenLength = len(tempNode.children)
+  while tempNode.children is not None and childrenTraversed <= childrenLength:
+    childrenTraversed += 1    
+    for index in range(len(tempNode.children)):
+      child = tempNode.children[index]
       if(child.output is not None):
         return child.output
       elif str(example[child.attribute]) == child.value:
         tempNode = child
-        continue      
-  return None  
+        childrenTraversed = 0  
+        childrenLength = len(tempNode.children)
+        break
+  return None
 
 def findBestAttribute(data, availableLabels):
   attribMap = dict()
