@@ -9,35 +9,11 @@ def ID3(examples, default):
   and the target class variable is a special attribute with the name "Class".
   Any missing attributes are denoted with a value of "?"
   '''
-  root = Node(None, None, None, None)
-  attributes = getAttributesList(examples)
-  buildTree(examples, default, root, attributes)
-  return root
-
-def buildTree(examples, default, parentNode, attributes):
-  if not examples or not attributes or len(attributes) is 0:
-    parentNode.addChild(Node(default, default, default,0.0))
-  elif isNonTrivialSplitPossible(examples) == False:
-    modeClass = getModeClassLabel(examples)
-    parentNode.addChild(Node(modeClass, modeClass, modeClass,0.0))
-  else:
-    bestAttribute = getBestAttribute(examples, attributes)
-    #print(bestAttribute + " is best attribute from " + " , ".join(attributes))
-    #if bestAttribute is None:
-     # print("something is wrong! best attribute is none")
-    possibleValues = getPossibleValuesForAttribute(examples, bestAttribute)
-    for value in possibleValues:      
-      examplesWithBesAttributeValue = getExamplesWithBestAttributeValue(examples, bestAttribute, value)
-      attributeValueProbability = len(examplesWithBesAttributeValue) / len(examples)
-      child = Node(bestAttribute, value, None, attributeValueProbability)
-      if bestAttribute is value:
-        print("something is terribly wrong, attribute = value")
-      modeOfExampleWithBestValue = getModeClassLabel(examplesWithBesAttributeValue)
-      if attributes.__contains__(bestAttribute):
-        attributes.remove(bestAttribute)
-      buildTree(examplesWithBesAttributeValue, modeOfExampleWithBestValue, child, attributes)
-      parentNode.addChild(child)
-
+  id3Tree = Node(None, 'root', None)
+  columnArray = list(examples[0].keys())
+  columnArray.remove('Class')
+  createTree(examples, columnArray, id3Tree)
+  return id3Tree
 
 def getExamplesWithBestAttributeValue(examples, bestAttribute, value):
   examplesWithBestValue = []
@@ -145,32 +121,52 @@ def prune(node, examples):
   '''
   if not examples:
     return
-  #if node.value is None and node.output is None:
-   # return 
   originalAccuracy = test(node, examples)
   prunableNodes = []
   findPrunableNodes(node, prunableNodes)
-  for prunableNode in prunableNodes:
-    pruneOutput = getPruneOutput(prunableNode)
-    pruneChildren = prunableNode.children
-    prunableNode.children = []
-    pruneAccuracy = test(node, examples)
-    if originalAccuracy > pruneAccuracy:
-      prunableNode.children = pruneChildren
-    else:
-      prunableNode.output = pruneOutput
-      #prune(node, examples)
+  totalPrunableNodes = len(prunableNodes)
+  nodesPruned = 0
+  while nodesPruned < totalPrunableNodes:
+    isNodePruned = pruneNode(node, prunableNodes[nodesPruned],originalAccuracy,examples)
+    nodesPruned += 1
+    if isNodePruned is True:
+      originalAccuracy = test(node, examples)
+      prunableNodes = []
+      findPrunableNodes(node, prunableNodes)
+      totalPrunableNodes = len(prunableNodes)
+      nodesPruned = 0  
+      isNodePruned = False
+  
+def pruneNode(rootNode, prunableNode, originalAccuracy, examples):
+  if prunableNode.output is not None:
+    return False  
+  pruneOutput = getPruneOutput(prunableNode)
+  pruneChildren = prunableNode.children
+  prunableNode.children = []
+  prunableNode.children.append(Node(None, None, pruneOutput))
+  pruneAccuracy = test(rootNode, examples)
+  if originalAccuracy > pruneAccuracy:
+    prunableNode.children = pruneChildren
+    return False
+  return True
 
 def isLeafNode(node):
-  return len(node.children) == 0 and node.output != None
+  return len(node.children) == 1 and node.output == None and node.children[0].output != None
 
-def isPrunableNode(node):
-  totalChild = len(node.children)
+#All the children have the same attribute
+#Every child of all children should have an output value
+def isPrunableNode(node):  
+  if not node.children:
+    return False
+  attribute = node.children[0].attribute
   for child in node.children:
-    if not isLeafNode(child):
-      totalChild -= 1
-      break
-  return totalChild == 0    
+    if child.attribute is not attribute or not child.children:
+      return False
+    if len(child.children) == 1 and child.children[0].output is not None:
+      continue
+    else: 
+      return False
+  return True  
 
 def findPrunableNodes(node, prunableNodes):
   if isPrunableNode(node):
@@ -181,13 +177,22 @@ def findPrunableNodes(node, prunableNodes):
 
 def getPruneOutput(node):
   output = None
-  attrProb = 0.0
+  attrProb = -1
   for child in node.children:
-    if attrProb < child.attributeValueProbability:
-      attrProb = child.attributeValueProbability
-      output = child.output
-  return output  
+    if attrProb < child.probability:
+      attrProb = child.probability
+      output = child.children[0].output
+  return output   
 
+def getChildValueWithMaxProbability(node, attribute):
+  value = None
+  attrProb = -1
+  if node.children:
+    for child in node.children:
+      if attrProb < child.probability:
+         attrProb = child.probability
+         value = child.value
+  return value   
 
 def test(node, examples):
   '''
@@ -206,19 +211,113 @@ def evaluate(node, example):
   '''
   Takes in a tree and one example.  Returns the Class value that the tree
   assigns to the example.
-  ''' 
+  '''  
   tempNode = copy.deepcopy(node)
   childrenTraversed = 0  
   childrenLength = len(tempNode.children)
-  while tempNode.children is not None and childrenTraversed <= childrenLength:
+  while tempNode is not None and childrenTraversed < childrenLength:
     childrenTraversed += 1
-    for child in tempNode.children:
+    result = evaluateNode(tempNode, example)
+    if result is not None:
+      return result
+    elif tempNode.children:
+       splitAttribute = tempNode.children[0].attribute
+       if splitAttribute in example:
+         assumedValue = getChildValueWithMaxProbability(tempNode, splitAttribute)
+         example[splitAttribute] = assumedValue
+         result = evaluateNode(tempNode, example)
+       if result is not None:
+         return result  
+  return None  
+
+def evaluateNode(tempNode, example): 
+  childrenTraversed = 0  
+  childrenLength = len(tempNode.children)
+  while tempNode.children is not None and childrenTraversed <= childrenLength:
+    childrenTraversed += 1    
+    for index in range(len(tempNode.children)):
+      child = tempNode.children[index]
       if(child.output is not None):
         return child.output
-      elif example[child.attribute] == child.value:
+      elif str(example[child.attribute]) == child.value:
         tempNode = child
-        continue      
-  return None  
+        childrenTraversed = 0  
+        childrenLength = len(tempNode.children)
+        break
+  return None
+
+def findBestAttribute(data, availableLabels):
+  attribMap = dict()
+  bestAttribName = ''
+  bestAttribValue = 1
+  for label in availableLabels:
+    attribMap[label] = dict()
+
+  for row in data:
+    for key in row:
+      if key != 'Class' and key in availableLabels:
+        if not '_total' in attribMap[key]:
+          attribMap[key]['_total'] = 0
+        attribMap[key]['_total'] += 1
+        if not str(row[key]) in attribMap[key]:
+          attribMap[key][str(row[key])] = dict()
+          attribMap[key][str(row[key])]['_total'] = 0
+        if not str(row['Class']) in attribMap[key][str(row[key])]:
+          attribMap[key][str(row[key])][str(row['Class'])] = 0
+        attribMap[key][str(row[key])][str(row['Class'])] += 1
+        attribMap[key][str(row[key])]['_total'] += 1
+
+  for attrib in attribMap:
+    attribGain = 0
+    attribTotal = attribMap[attrib]['_total']
+    for key in attribMap[attrib]:
+      if key != '_total':
+        keyTotal = attribMap[attrib][key]['_total']
+        for subKey in attribMap[attrib][key]:
+          if subKey != '_total':
+            attribGain += ((1.0 * keyTotal) / attribTotal) * ((-1) * ( ((1.0 * attribMap[attrib][key][subKey]) / keyTotal) * math.log(((1.0 * attribMap[attrib][key][subKey]) / keyTotal)) ) )
+
+    attribMap[attrib]['_ig'] = attribGain
+    if bestAttribValue > attribGain:
+      bestAttribValue = attribGain
+      bestAttribName = attrib
+
+  returnMap = dict()
+  returnMap[bestAttribName] = attribMap[bestAttribName]
+  return returnMap
+
+def createTree(data, availableAttributes, treeNode):
+  bestAttributeInfo = findBestAttribute(data, availableAttributes)
+  bestAttrib = next(iter(bestAttributeInfo))
+  bestAttributeInfo = bestAttributeInfo[bestAttrib]
+  bestAttributeTotal = bestAttributeInfo['_total']
+  del bestAttributeInfo['_total']
+  del bestAttributeInfo['_ig']
+
+  for value in bestAttributeInfo:
+    attribValueCount = bestAttributeInfo[value]['_total']
+
+    tempChild = Node(value, bestAttrib, None, (1.0 * attribValueCount / bestAttributeTotal))
+    if len(bestAttributeInfo[value].keys()) == 2:
+      # I will have the leaf node
+      output = list(bestAttributeInfo[value].keys())
+      output.remove('_total')
+      outputVal = output[0]
+      try:
+        outputVal = int(outputVal)
+      except Exception:
+        outputVal = outputVal
+      tempChild.children.append(Node(None, None, outputVal))
+      treeNode.children.append(tempChild)
+    else:
+      subData = []
+      for instance in data:
+        if str(instance[bestAttrib]) == str(value):
+          subData.append(instance)
+      treeNode.children.append(tempChild)
+      tempAvailableAttributes = availableAttributes.copy()
+      tempAvailableAttributes.remove(bestAttrib)
+      createTree(subData, tempAvailableAttributes, tempChild)
 
 
 

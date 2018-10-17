@@ -1,5 +1,6 @@
 import ID3, parse, random
-
+from unit_tests import testPruning
+testPruning()
 data1 = [
   dict(a= 1, b= 0, c= 1, Class= 'B'),
   dict(a= 0, b= 1, c= 0, Class= 'A'),
